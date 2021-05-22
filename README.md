@@ -18,4 +18,6 @@ This is based on my other earlier application on an arduino with NeoPixel LED Ri
 - src/main.cpp is the main program to compile and load to the microcontroller
 - Change the variables in the definitions as you wish
 
-[![(Oops it didn't show up?)](http://img.youtube.com/vi/skA2pAGD2J0/0.jpg)](http://www.youtube.com/watch?v=skA2pAGD2J0 "Video on YouTube")
+[![(Oops it didn't show up?)](http://img.youtube.com/vi/cO76cY5SxvQ/0.jpg)](http://www.youtube.com/watch?v=cO76cY5SxvQ "Video on YouTube")
+
+https://www.instagram.com/p/CPMX3MvpxEf/?utm_source=ig_web_copy_link
