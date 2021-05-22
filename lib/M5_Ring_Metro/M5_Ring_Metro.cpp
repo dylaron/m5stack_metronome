@@ -74,9 +74,11 @@ void M5_Ring_Metro::centerCircle(uint16_t _bgcolor)
 void M5_Ring_Metro::showMsg(String _msg, uint16_t _bgcolor)
 {
     this->centerCircle(_bgcolor);
-    M5.Lcd.setCursor(this->xc - 27, this->yc - 14);
-    M5.Lcd.setTextDatum(MC_DATUM);
     M5.Lcd.setTextSize(4);
+    int16_t x_offset = M5.Lcd.textWidth(_msg) / 2;
+    int16_t y_offset = M5.Lcd.fontHeight() / 2;
+    M5.Lcd.setCursor(this->xc - x_offset, this->yc - y_offset);
+    // M5.Lcd.setTextDatum(MC_DATUM);
     M5.Lcd.setTextColor(TFT_YELLOW, _bgcolor);
     M5.Lcd.print(_msg);
 }
