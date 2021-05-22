@@ -1,13 +1,7 @@
 #include <Arduino.h>
 #include <M5Stack.h>
 
-#define NUMPIXELS 16
-// Parameters
-#define AUTOSTART false // start the metronome automatically upon power up and reset
-#define INITBPM 96      // Default BPM to start with
-#define BEATS 4         // Beats per bar (measure, cycle)
-#define SUBBEAT 12      // Divide per beat into sub steps
-#define UPBEAT false    // True - Accent on the off/upbeat, False - on/downbeat
+#include "Defines.h" // all configurable variables are there
 
 #include "Beat_Gen.h" // This class deals with timing
 #include "Tap2Bpm.h"
