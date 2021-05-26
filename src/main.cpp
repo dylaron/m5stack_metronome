@@ -15,6 +15,8 @@ unsigned int totalpixels = NUMPIXELS;
 bool upbeat = UPBEAT;
 unsigned int steps_offset = steps_p_beat / 2 * upbeat;
 char m = 'S', m_trapexit = 'S'; // R - running. S - standby. T - tapping
+bool mute_status = false;
+String mute_message[2] = {"SOUND", "MUTED"};
 
 Beat_gen myBeat;
 M5_Ring_Metro myRing;
@@ -34,6 +36,12 @@ void setup()
   myRing.setTicksRGB();
   myRing.showBPM(bpm);
   myRing.showDots();
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_YELLOW, TFT_DARKGREY);
+  M5.Lcd.setCursor(50, 220);
+  M5.Lcd.print(" - ");
+  M5.Lcd.setCursor(237, 220);
+  M5.Lcd.print(" + ");
 
   if (init_start)
   {
@@ -86,10 +94,13 @@ void loop()
       unsigned int onbeat = (myBeat.current_step() == steps_offset) + ((myBeat.current_step() + steps_offset) % steps_p_beat == 0);
       myRing.updateRGB(myBeat.progress_pct(), onbeat);
       myRing.showDots();
-      if (onbeat == 2)
-        M5.Speaker.tone(261, 60);
-      else if (onbeat == 1)
-        M5.Speaker.tone(196, 30);
+      if (!mute_status)
+      {
+        if (onbeat == 2)
+          M5.Speaker.tone(261, 60);
+        else if (onbeat == 1)
+          M5.Speaker.tone(196, 30);
+      }
     }
     if (buttonDrop)
     {
@@ -137,5 +148,14 @@ void loop()
   default:
     break;
   }
-  delay(10);
+
+  if (M5.BtnA.wasPressed() && M5.BtnC.wasPressed())
+  {
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
+    M5.Lcd.setCursor(260, 2);
+    mute_status = !mute_status;
+    M5.Lcd.print(mute_message[mute_status]);
+  }
+  delay(20);
 }
