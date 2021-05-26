@@ -7,7 +7,8 @@ This is based on my other earlier application on an arduino with NeoPixel LED Ri
 - An indicator runs around the ring every measure / bar (4 beats).
 - Whole ring flashes on every beat. Downbeat or upbeat configurable.
 - First beat accented (stronger flash, higher buzz tone)
-- Left and Right buttons to adjust the BPM on the fly.
+- Adjust the BPM on the fly.
+- Press '-' and '+' at the same time to mute/unmute.
 - 'tap to set BPM' by long press the middle button when stopped. Metronome starts automatically after 5 taps.
 
 # Bill of material
