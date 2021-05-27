@@ -1,3 +1,10 @@
+/*
+  A visulization of a rotary metronome on M5Stack
+  2021 Copyright (c)
+  Author: 'DyLaron' Aaron Yuliang Deng
+  Date: MAY-26-2021
+*/
+
 #ifndef M5_RING_METRO_H
 #define M5_RING_METRO_H
 
