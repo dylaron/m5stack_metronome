@@ -15,7 +15,7 @@ class Pulser
 private:
     unsigned int period;
     unsigned long next_time;
-    bool running, _firsttick;
+    bool running;
 
 public:
     Pulser();
