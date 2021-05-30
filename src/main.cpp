@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <M5Stack.h>
+#include <Fsm.h> // arduino-fsm Library by Jon Black
 
 #include "Defines.h" // all configurable variables are there
 
@@ -12,9 +13,11 @@ unsigned int bpm = INITBPM;
 unsigned int beats_p_bar = BEATS;
 unsigned int steps_p_beat = SUBBEAT;
 unsigned int totalpixels = NUMPIXELS;
-bool upbeat = UPBEAT;
+bool upbeat = UPBEAT,
+     long_pressed_fired = false,
+     tapping_accepted = false,
+     ignore_next_release = false;
 unsigned int steps_offset = steps_p_beat / 2 * upbeat;
-char m = 'S', m_trapexit = 'S'; // R - running. S - standby. T - tapping
 bool mute_status = false;
 String mute_message[2] = {"SOUND", "MUTED"};
 
@@ -22,6 +25,123 @@ Beat_gen myBeat;
 M5_Ring_Metro myRing;
 Tap2Bpm myTapper(5);
 
+// Trigger Events for the State Machine --------------------
+#define BUTTON_PRESSED_EVENT 0
+#define BUTTON_RELEASED_EVENT 1
+#define BUTTON_LONGPRESS_EVENT 2
+#define TAPPING_SUCC_EVENT 3
+
+//State Machine States
+void on_standby_enter()
+{
+  myRing.setTicksRGB();
+  myRing.showBPM(bpm);
+  myRing.showDots();
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(TFT_YELLOW, TFT_DARKGREY);
+  M5.Lcd.setCursor(50, 220);
+  M5.Lcd.print(" - ");
+  M5.Lcd.setCursor(237, 220);
+  M5.Lcd.print(" + ");
+}
+//----------------------------------------------------------
+void on_active_enter()
+{
+  myBeat.start(M5.BtnB.lastChange());
+  myRing.showBPM(bpm);
+}
+//----------------------------------------------------------
+void on_active_state()
+{
+  // check if it's time on the beat
+  if (myBeat.checktime())
+  {
+    unsigned int onbeat = (myBeat.current_step() == steps_offset) + ((myBeat.current_step() + steps_offset) % steps_p_beat == 0);
+    myRing.updateRGB(myBeat.progress_pct(), onbeat);
+    myRing.showDots();
+    if (!mute_status)
+    {
+      if (onbeat == 2)
+        M5.Speaker.tone(261, 60);
+      else if (onbeat == 1)
+        M5.Speaker.tone(196, 30);
+    }
+  }
+}
+//----------------------------------------------------------
+void on_active_exit()
+{
+  ignore_next_release = true;
+  myBeat.stop();
+}
+//----------------------------------------------------------
+void on_tapping_enter()
+{
+  myRing.showMsg("TAP", TFT_GREEN);
+  myTapper.reset();
+  ignore_next_release = true;
+}
+//----------------------------------------------------------
+void on_tapping_state()
+{
+  if (M5.BtnB.wasReleased())
+    if (!ignore_next_release)
+    {
+      bool doneTapping = myTapper.tapNow(M5.BtnB.lastChange());
+      myRing.showMsg(String(myTapper.getRemainingTaps()), TFT_GREEN);
+      if (doneTapping)
+      {
+        if (myTapper.checkBPM())
+        {
+          bpm = myTapper.getBPM();
+          Serial.println("New BPM = ");
+          Serial.println(bpm);
+          myBeat.setBeats(bpm, beats_p_bar, steps_p_beat);
+          tapping_accepted = true;
+        }
+        else
+        {
+          myRing.showMsg("TAP", TFT_GREEN);
+          myTapper.reset();
+        }
+      }
+      else
+        ignore_next_release = false;
+    }
+}
+
+//State Machine Declaration
+State state_standby(&on_standby_enter, NULL, NULL);
+State state_active(&on_active_enter, &on_active_state, &on_active_exit);
+State state_tapping(&on_tapping_enter, &on_tapping_state, NULL);
+Fsm fsm_metronome(&state_standby);
+//----------------------------------------------------------
+void checkButtonsAndTrig(Button &_b, Fsm &_fsm)
+{
+  if (_b.wasPressed())
+  {
+    _fsm.trigger(BUTTON_PRESSED_EVENT);
+    long_pressed_fired = false;
+  }
+
+  if (_b.pressedFor(1600)) // Going to tap mode
+  {
+    if (!long_pressed_fired)
+    {
+      _fsm.trigger(BUTTON_LONGPRESS_EVENT);
+      long_pressed_fired = true;
+      ignore_next_release = true;
+    }
+  }
+  else if (_b.wasReleased())
+  {
+    if (!ignore_next_release)
+      _fsm.trigger(BUTTON_RELEASED_EVENT);
+    else
+      ignore_next_release = false;
+  }
+}
+//----------------------------------------------------------
 void setup()
 {
   M5.begin();
@@ -33,31 +153,26 @@ void setup()
   M5.Lcd.setTextSize(1);
   M5.Lcd.print("VisualNome by DyLaron\n");
   myRing.begin(NUMPIXELS, beats_p_bar);
-  myRing.setTicksRGB();
-  myRing.showBPM(bpm);
-  myRing.showDots();
-  M5.Lcd.setTextSize(2);
-  M5.Lcd.setTextColor(TFT_YELLOW, TFT_DARKGREY);
-  M5.Lcd.setCursor(50, 220);
-  M5.Lcd.print(" - ");
-  M5.Lcd.setCursor(237, 220);
-  M5.Lcd.print(" + ");
 
-  if (init_start)
-  {
-    myBeat.start(millis());
-    m = 'R';
-    Serial.print("Started (Auto-run)\n");
-  }
+  fsm_metronome.add_transition(&state_standby, &state_active, BUTTON_RELEASED_EVENT, NULL);
+  fsm_metronome.add_transition(&state_standby, &state_tapping, BUTTON_LONGPRESS_EVENT, NULL);
+  fsm_metronome.add_transition(&state_tapping, &state_standby, BUTTON_LONGPRESS_EVENT, NULL);
+  fsm_metronome.add_transition(&state_active, &state_standby, BUTTON_PRESSED_EVENT, NULL);
+  fsm_metronome.add_transition(&state_tapping, &state_active, TAPPING_SUCC_EVENT, NULL);
 }
-
+//----------------------------------------------------------
 void loop()
 {
   // put your main code here, to run repeatedly:
   M5.update(); // need to call update()
-  bool buttonDrop = M5.BtnB.wasPressed();
-  bool buttonRelease = M5.BtnB.wasReleased();
-  bool longpress = M5.BtnB.pressedFor(1600);
+  fsm_metronome.run_machine();
+  checkButtonsAndTrig(M5.BtnB, fsm_metronome);
+  if (tapping_accepted)
+  {
+    fsm_metronome.trigger(TAPPING_SUCC_EVENT);
+    tapping_accepted = false;
+  }
+
   if (M5.BtnA.wasPressed() && bpm > 40)
   {
     bpm--;
@@ -69,84 +184,6 @@ void loop()
     bpm++;
     myRing.showBPM(bpm);
     myBeat.setBeats(bpm, beats_p_bar, steps_p_beat);
-  }
-  switch (m)
-  {
-  case 'S':
-    if (longpress) // Going to tap mode, while stopping at Y to catch the button release
-    {
-      m = 'Z';
-      m_trapexit = 'T';
-      myRing.showMsg("TAP", TFT_GREEN);
-    }
-    else if (buttonRelease)
-    {
-      myBeat.start(M5.BtnB.lastChange());
-      myRing.showBPM(bpm);
-      m = 'R';
-    }
-    break;
-
-  case 'R':
-    // check if it's time on the beat
-    if (myBeat.checktime())
-    {
-      unsigned int onbeat = (myBeat.current_step() == steps_offset) + ((myBeat.current_step() + steps_offset) % steps_p_beat == 0);
-      myRing.updateRGB(myBeat.progress_pct(), onbeat);
-      myRing.showDots();
-      if (!mute_status)
-      {
-        if (onbeat == 2)
-          M5.Speaker.tone(261, 60);
-        else if (onbeat == 1)
-          M5.Speaker.tone(196, 30);
-      }
-    }
-    if (buttonDrop)
-    {
-      myBeat.stop();
-      m = 'Z';
-      m_trapexit = 'S';
-    }
-    break;
-
-  case 'T':
-    if (buttonRelease)
-    {
-      bool doneTapping = myTapper.tapNow(M5.BtnB.lastChange());
-      myRing.showMsg(String(myTapper.getRemainingTaps()), TFT_GREEN);
-      if (doneTapping)
-      {
-        if (myTapper.checkBPM())
-        {
-          bpm = myTapper.getBPM();
-          myRing.showBPM(bpm);
-          myBeat.setBeats(bpm, beats_p_bar, steps_p_beat);
-          myBeat.start(M5.BtnB.lastChange());
-          m = 'R';
-        }
-        else
-        {
-          myRing.showMsg("TAP", TFT_GREEN);
-          // tap_count = 0;
-        }
-        myTapper.reset();
-      }
-    }
-    if (longpress)
-    {
-      m = 'Z';
-      m_trapexit = 'S';
-    }
-    break;
-
-  case 'Z': //trap to catch a release action
-    if (buttonRelease)
-      m = m_trapexit;
-    break;
-
-  default:
-    break;
   }
 
   if (M5.BtnA.wasPressed() && M5.BtnC.wasPressed())
